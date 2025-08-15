@@ -9,9 +9,7 @@ import io.ktor.network.sockets.openWriteChannel
 import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
@@ -25,14 +23,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okio.IOException
+import kotlin.coroutines.CoroutineContext
 import io.ktor.network.sockets.Socket as WrappedSocket
 
-actual fun TcpServer(port: Int): TcpServer = KtorTcpServer(port)
+actual fun TcpServer(port: Int, context: CoroutineContext): TcpServer = KtorTcpServer(port = port, dispatcher = context)
 
 class KtorTcpServer(
   private val port: Int = 0,
   private val acceptDelayMillis: Int = 0,
-  dispatcher: CoroutineDispatcher = Dispatchers.IO
+  dispatcher: CoroutineContext = Dispatchers.IO
 ) : TcpServer {
 
   private val selectorManager = SelectorManager(dispatcher)

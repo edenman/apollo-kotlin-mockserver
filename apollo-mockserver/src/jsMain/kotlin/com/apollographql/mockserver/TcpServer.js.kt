@@ -7,6 +7,7 @@ import node.net.AddressInfo
 import node.net.createServer
 import okio.IOException
 import org.w3c.dom.events.Event
+import kotlin.coroutines.CoroutineContext
 import node.net.Server as WrappedServer
 import node.net.Socket as WrappedSocket
 
@@ -84,4 +85,4 @@ internal class NodeTcpServer(private val port: Int) : TcpServer {
   }
 }
 
-actual fun TcpServer(port: Int): TcpServer = NodeTcpServer(port)
+actual fun TcpServer(port: Int, context: CoroutineContext): TcpServer = NodeTcpServer(port)

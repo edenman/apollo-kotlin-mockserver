@@ -1,6 +1,8 @@
 package com.apollographql.mockserver
 
+import kotlinx.coroutines.CoroutineDispatcher
 import okio.Closeable
+import kotlin.coroutines.CoroutineContext
 
 interface TcpSocket: Closeable {
   /**
@@ -56,4 +58,4 @@ class Address(
     val port: Int
 )
 
-expect fun TcpServer(port: Int): TcpServer
+expect fun TcpServer(port: Int, context: CoroutineContext): TcpServer

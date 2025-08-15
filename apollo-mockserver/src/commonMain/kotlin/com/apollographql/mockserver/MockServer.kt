@@ -2,6 +2,7 @@ package com.apollographql.mockserver
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
@@ -13,6 +14,7 @@ import okio.Buffer
 import okio.ByteString
 import okio.ByteString.Companion.encodeUtf8
 import okio.Closeable
+import kotlin.coroutines.CoroutineContext
 import kotlin.js.JsName
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -116,13 +118,14 @@ interface MockServer : Closeable {
       check(tcpServer == null || port == null) {
         "It is an error to set both tcpServer and port"
       }
-      val server = tcpServer ?: TcpServer(port ?: 0)
+      val actualScope = scope ?: defaultCoroutineScope()
+      val server = tcpServer ?: TcpServer(port ?: 0, actualScope.coroutineContext)
       return MockServerImpl(
         mockServerHandler = handler ?: QueueMockServerHandler(),
         handlePings = handlePings ?: true,
         server = server,
         listener = listener,
-        scope = scope ?: defaultCoroutineScope()
+        scope = actualScope
       )
     }
   }
@@ -138,10 +141,12 @@ internal class MockServerImpl(
   private val requests = Channel<MockRequestBase>(Channel.UNLIMITED)
 
   init {
+    println("MockServerImpl created, calling server.listen")
     server.listen(::onSocket)
   }
 
   private fun onSocket(socket: TcpSocket) {
+    println("onSocket called, launching in scope $scope")
     scope.launch {
       try {
         handleRequests(mockServerHandler, socket, listener) {
@@ -176,6 +181,7 @@ internal class MockServerImpl(
       listener: MockServer.Listener?,
       onRequest: (MockRequestBase) -> Unit,
   ) {
+    println("handleRequests started")
     val buffer = Buffer()
     val reader = object : Reader {
       override val buffer: Buffer
@@ -189,15 +195,20 @@ internal class MockServerImpl(
 
     var done = false
     while (!done) {
+      println("calling suspend readRequest")
       val request = readRequest(reader)
+      println("got request $request")
       listener?.onRequest(request)
 
       onRequest(request)
 
+      println("calling handler")
       val response = handler.handle(request)
 
+      println("calling delay ${response.delayMillis}")
       delay(response.delayMillis)
 
+      println("launching new scope to write the response")
       coroutineScope {
         if (request is WebsocketMockRequest) {
           launch {
@@ -224,6 +235,7 @@ internal class MockServerImpl(
             }
           }
         }
+        println("writing the response")
         writeResponse(response, request.version) {
           socket.send(it)
         }
@@ -247,6 +259,7 @@ internal class MockServerImpl(
   }
 
   override fun close() {
+    println("close called, cancelling scope")
     scope.cancel()
     server.close()
   }
@@ -270,28 +283,15 @@ internal class MockServerImpl(
 }
 
 @JsName("createMockServer")
-fun MockServer(): MockServer = MockServerImpl(
+fun MockServer(context: CoroutineContext = Dispatchers.Main): MockServer = MockServerImpl(
     QueueMockServerHandler(),
     true,
-    TcpServer(0),
+    TcpServer(0, context),
     null,
     defaultCoroutineScope()
 )
 
-@Deprecated("Use MockServer.Builder() instead", level = DeprecationLevel.ERROR)
-fun MockServer(handler: MockServerHandler): MockServer =
-  MockServerImpl(
-      handler,
-      true,
-      TcpServer(0),
-      null,
-      defaultCoroutineScope()
-  )
-
 private fun defaultCoroutineScope() = CoroutineScope(SupervisorJob())
-
-@Deprecated("Use enqueueString instead", ReplaceWith("enqueueString(string = string, delayMs = delayMs, statusCode = statusCode)"), DeprecationLevel.ERROR)
-fun MockServer.enqueue(string: String = "", delayMs: Long = 0, statusCode: Int = 200) = enqueueString(string, delayMs, statusCode)
 
 fun MockServer.enqueueString(string: String = "", delayMs: Long = 0, statusCode: Int = 200, contentType: String = "text/plain") {
   enqueue(MockResponse.Builder()

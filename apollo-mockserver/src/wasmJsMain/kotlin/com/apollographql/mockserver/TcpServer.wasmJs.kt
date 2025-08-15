@@ -1,5 +1,7 @@
 package com.apollographql.mockserver
 
-actual fun TcpServer(port: Int): TcpServer {
+import kotlin.coroutines.CoroutineContext
+
+actual fun TcpServer(port: Int, context: CoroutineContext): TcpServer {
   TODO("Not yet implemented")
 }
